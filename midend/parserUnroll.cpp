@@ -260,8 +260,13 @@ class ParserStateRewriter : public Transform {
                 id = IR::ID(id.name + std::to_string(index));
             }
         } else if (!parserStructure->callsIndexes.count(id.name)) {
-            index = 0;
-            parserStructure->callsIndexes[id.name] = 0;
+            size_t value = 0;
+            if (id.name == IR::ParserState::start) {
+                // Call of a start state should start from 1.
+                value = 1;
+            }
+            index = value;
+            parserStructure->callsIndexes[id.name] = value;
         }
         currentIndex = index;
         visitedStates.emplace(VisitedKey(name, state->statesIndexes), index);
@@ -616,7 +621,6 @@ class ParserSymbolicInterpreter {
     /// Gets new name for a state
     IR::ID getNewName(ParserStateInfo* state) {
         if (state->currentIndex == 0) {
-            structure->callsIndexes.emplace(state->state->name.name, 0);
             return state->state->name;
         }
         return IR::ID(state->state->name + std::to_string(state->currentIndex));
