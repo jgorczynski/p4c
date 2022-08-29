@@ -26,23 +26,34 @@ parser P(packet_in p, out Headers h) {
         }
     }
     state start1 {
+        p.extract<Hdr>(h.h1[32w1]);
+        transition select((bit<1>)(h.h1[0].x == 1w1)) {
+            1w1: start_true1;
+            1w0: start_join1;
+            default: noMatch;
+        }
+    }
+    state start2 {
         transition stateOutOfBound;
     }
     state start_join {
         transition select(32w0) {
             32w0: accept;
-            default: start;
+            default: start1;
         }
     }
     state start_join1 {
         transition select(32w1) {
             32w0: accept;
-            default: start1;
+            default: start2;
         }
     }
     state start_true {
         p.extract<Hdr>(h.h1[32w1]);
         transition start_join1;
+    }
+    state start_true1 {
+        transition stateOutOfBound;
     }
 }
 

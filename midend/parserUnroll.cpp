@@ -75,8 +75,9 @@ struct VisitedKey {
         if (name > e.name)
             return false;
         std::unordered_map<StackVariable, std::pair<size_t, size_t>, StackVariableHash > mp;
-        for (auto& i1 : indexes)
+        for (auto& i1 : indexes) {
             mp.emplace(i1.first, std::make_pair(i1.second, -1));
+        }
         for (auto& i2 : e.indexes) {
             auto ref = mp.find(i2.first);
             if (ref == mp.end())
@@ -175,7 +176,6 @@ class ParserStateRewriter : public Transform {
         auto* res = value->to<SymbolicInteger>()->constant->clone();
         newExpression->right = res;
         BUG_CHECK(res->fitsInt64(), "To big integer for a header stack index %1%", res);
-        state->statesIndexes[expression->left] = (size_t)res->asInt64();
         return newExpression;
     }
 
@@ -260,13 +260,8 @@ class ParserStateRewriter : public Transform {
                 id = IR::ID(id.name + std::to_string(index));
             }
         } else if (!parserStructure->callsIndexes.count(id.name)) {
-            size_t value = 0;
-            if (id.name == IR::ParserState::start) {
-                // Call of a start state should start from 1.
-                value = 1;
-            }
-            index = value;
-            parserStructure->callsIndexes[id.name] = value;
+            index = 0;
+            parserStructure->callsIndexes[id.name] = 0;
         }
         currentIndex = index;
         visitedStates.emplace(VisitedKey(name, state->statesIndexes), index);
@@ -606,10 +601,6 @@ class ParserSymbolicInterpreter {
 
                 // If no header validity has changed we can't really unroll
                 if (!headerValidityChange(crt->before, state->before)) {
-                    if (unroll)
-                        ::warning(ErrorType::ERR_INVALID,
-                                  "Parser cycle cannot be unrolled:\n%1%",
-                                  stateChain(state));
                     return true;
                 }
                 break;
@@ -621,6 +612,7 @@ class ParserSymbolicInterpreter {
     /// Gets new name for a state
     IR::ID getNewName(ParserStateInfo* state) {
         if (state->currentIndex == 0) {
+            //structure->callsIndexes.emplace(state->state->name.name, 0);
             return state->state->name;
         }
         return IR::ID(state->state->name + std::to_string(state->currentIndex));
@@ -678,6 +670,21 @@ class ParserSymbolicInterpreter {
         parser = structure->parser;
         hasOutOfboundState = false;
     }
+
+    /// generate call OutOfBound
+    void addOutFoBound(ParserStateInfo* stateInfo, std::unordered_set<cstring>& newStates, bool checkBefore = true) {
+        hasOutOfboundState = true;
+        IR::ID newName = getNewName(stateInfo);
+        if (checkBefore && newStates.count(newName)) {
+            return;
+        }
+        newStates.insert(newName);
+        stateInfo->newState = new IR::ParserState(newName,
+            IR::IndexedVector<IR::StatOrDecl>(),
+            new IR::PathExpression(new IR::Type_State(),
+            new IR::Path(outOfBoundsStateName, false)));
+    }
+
     /// running symbolic execution
     ParserInfo* run() {
         synthesizedParser = new ParserInfo();
@@ -686,6 +693,8 @@ class ParserSymbolicInterpreter {
             // error during initializer evaluation
             return synthesizedParser;
         auto startInfo = newStateInfo(nullptr, structure->start->name.name, initMap, 0);
+        structure->callsIndexes.emplace(structure->start->name.name, 0);
+        startInfo->scenarioStates.insert(structure->start->name.name);
         std::vector<ParserStateInfo*> toRun;  // worklist
         toRun.push_back(startInfo);
         std::set<VisitedKey> visited;
@@ -707,8 +716,9 @@ class ParserSymbolicInterpreter {
             stateInfo->scenarioStates.insert(stateInfo->name);  // add to loops detection
             bool infLoop = checkLoops(stateInfo);
             if (infLoop) {
-                wasError = true;
                 // don't evaluate successors anymore
+                // generate call OutOfBound
+                addOutFoBound(stateInfo, newStates);
                 continue;
             }
             bool notAdded = newStates.count(getNewName(stateInfo)) == 0;
@@ -717,11 +727,7 @@ class ParserSymbolicInterpreter {
                 if (nextStates.second && stateInfo->predecessor &&
                  stateInfo->state->name !=stateInfo->predecessor->newState->name) {
                     // generate call OutOfBound
-                    hasOutOfboundState = true;
-                    stateInfo->newState = new IR::ParserState(getNewName(stateInfo),
-                        IR::IndexedVector<IR::StatOrDecl>(),
-                        new IR::PathExpression(new IR::Type_State(),
-                            new IR::Path(outOfBoundsStateName, false)));
+                    addOutFoBound(stateInfo, newStates, false);
                 } else {
                     // save current state
                     if (notAdded) {
