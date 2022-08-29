@@ -33,21 +33,86 @@ struct headers {
 }
 
 parser ParserImpl(packet_in packet, out headers hdr, inout metadata meta, inout standard_metadata_t standard_metadata) {
+    state stateOutOfBound {
+        verify(false, error.StackOutOfBounds);
+        transition reject;
+    }
     @name(".parse_my_tag") state parse_my_tag {
         packet.extract<my_tag_t>(hdr.my_tag);
         transition select(hdr.my_tag.ethertype) {
             16w0x8100 &&& 16w0xefff: parse_vlan_tag;
-            16w0x9000: parse_my_tag;
+            16w0x9000: parse_my_tag1;
             default: accept;
         }
+    }
+    state parse_my_tag1 {
+        packet.extract<my_tag_t>(hdr.my_tag);
+        transition select(hdr.my_tag.ethertype) {
+            16w0x8100 &&& 16w0xefff: parse_vlan_tag;
+            16w0x9000: parse_my_tag2;
+            default: accept;
+        }
+    }
+    state parse_my_tag2 {
+        transition stateOutOfBound;
+    }
+    state parse_my_tag3 {
+        packet.extract<my_tag_t>(hdr.my_tag);
+        transition select(hdr.my_tag.ethertype) {
+            16w0x8100 &&& 16w0xefff: parse_vlan_tag2;
+            16w0x9000: parse_my_tag4;
+            default: accept;
+        }
+    }
+    state parse_my_tag4 {
+        transition stateOutOfBound;
+    }
+    state parse_my_tag5 {
+        transition stateOutOfBound;
+    }
+    state parse_my_tag6 {
+        packet.extract<my_tag_t>(hdr.my_tag);
+        transition select(hdr.my_tag.ethertype) {
+            16w0x8100 &&& 16w0xefff: parse_vlan_tag5;
+            16w0x9000: parse_my_tag7;
+            default: accept;
+        }
+    }
+    state parse_my_tag7 {
+        transition stateOutOfBound;
     }
     @name(".parse_vlan_tag") state parse_vlan_tag {
         packet.extract<vlan_tag_t>(hdr.vlan_tag);
         transition select(hdr.vlan_tag.ethertype) {
-            16w0x8100 &&& 16w0xefff: parse_vlan_tag;
-            16w0x9000: parse_my_tag;
+            16w0x8100 &&& 16w0xefff: parse_vlan_tag1;
+            16w0x9000: parse_my_tag3;
             default: accept;
         }
+    }
+    state parse_vlan_tag1 {
+        packet.extract<vlan_tag_t>(hdr.vlan_tag);
+        transition select(hdr.vlan_tag.ethertype) {
+            16w0x8100 &&& 16w0xefff: parse_vlan_tag4;
+            16w0x9000: parse_my_tag6;
+            default: accept;
+        }
+    }
+    state parse_vlan_tag2 {
+        packet.extract<vlan_tag_t>(hdr.vlan_tag);
+        transition select(hdr.vlan_tag.ethertype) {
+            16w0x8100 &&& 16w0xefff: parse_vlan_tag3;
+            16w0x9000: parse_my_tag5;
+            default: accept;
+        }
+    }
+    state parse_vlan_tag3 {
+        transition stateOutOfBound;
+    }
+    state parse_vlan_tag4 {
+        transition stateOutOfBound;
+    }
+    state parse_vlan_tag5 {
+        transition stateOutOfBound;
     }
     @name(".start") state start {
         packet.extract<ethernet_t>(hdr.ethernet);

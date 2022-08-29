@@ -4,21 +4,9 @@ parser.p4(42): [--Wwarn=ignore-prop] warning: Result of packet.extract is not de
 parser.p4(86): [--Wwarn=ignore-prop] warning: Result of packet.extract is not defined: Exception: OverwritingHeader
         packet.extract(hdr.mpls);
         ^^^^^^^^^^^^^^^^^^^^^^^^
-[--Wwarn=invalid] warning: Parser cycle cannot be unrolled:
-Parser FabricParser state chain: start, parse_ethernet, parse_mpls, parse_ethernet, parse_mpls, parse_ethernet
-[--Wwarn=invalid] warning: Parser cycle cannot be unrolled:
-Parser FabricParser state chain: start, parse_ethernet, parse_mpls, parse_ethernet, parse_vlan_tag, parse_inner_vlan_tag, parse_mpls, parse_ethernet, parse_mpls
 parser.p4(57): [--Wwarn=ignore-prop] warning: Result of packet.extract is not defined: Exception: OverwritingHeader
         packet.extract(hdr.vlan_tag);
         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 parser.p4(73): [--Wwarn=ignore-prop] warning: Result of packet.extract is not defined: Exception: OverwritingHeader
         packet.extract(hdr.inner_vlan_tag);
         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-[--Wwarn=invalid] warning: Parser cycle cannot be unrolled:
-Parser FabricParser state chain: start, parse_ethernet, parse_mpls, parse_ethernet, parse_vlan_tag, parse_inner_vlan_tag, parse_mpls, parse_ethernet, parse_vlan_tag, parse_inner_vlan_tag, parse_mpls
-[--Wwarn=invalid] warning: Parser cycle cannot be unrolled:
-Parser FabricParser state chain: start, parse_ethernet, parse_mpls, parse_ethernet, parse_vlan_tag, parse_inner_vlan_tag, parse_mpls, parse_ethernet, parse_vlan_tag, parse_mpls
-[--Wwarn=invalid] warning: Parser cycle cannot be unrolled:
-Parser FabricParser state chain: start, parse_ethernet, parse_mpls, parse_ethernet, parse_vlan_tag, parse_mpls, parse_ethernet, parse_mpls
-[--Wwarn=invalid] warning: Parser cycle cannot be unrolled:
-Parser FabricParser state chain: start, parse_ethernet, parse_mpls, parse_ethernet, parse_vlan_tag, parse_mpls, parse_ethernet, parse_vlan_tag, parse_mpls

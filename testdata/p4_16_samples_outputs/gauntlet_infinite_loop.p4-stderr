@@ -25,5 +25,3 @@ gauntlet_infinite_loop.p4(23): [--Wwarn=invalid_header] warning: accessing a fie
 gauntlet_infinite_loop.p4(29): [--Wwarn=ignore-prop] warning: Result of packet.extract is not defined: Exception: OverwritingHeader
         b.extract(hdr.nop);
         ^^^^^^^^^^^^^^^^^^
-[--Wwarn=invalid] warning: Parser cycle cannot be unrolled:
-Parser p state chain: start, next, parse_hdr, next, parse_hdr, next

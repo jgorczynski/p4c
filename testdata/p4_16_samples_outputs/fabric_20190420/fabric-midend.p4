@@ -231,15 +231,19 @@ control FabricVerifyChecksum(inout parsed_headers_t hdr, inout fabric_metadata_t
 
 parser FabricParser(packet_in packet, out parsed_headers_t hdr, inout fabric_metadata_t fabric_metadata, inout standard_metadata_t standard_metadata) {
     @name("FabricParser.tmp_0") bit<4> tmp_0;
-    state start {
-        transition select(standard_metadata.ingress_port) {
-            9w255: parse_packet_out;
-            default: parse_ethernet;
-        }
+    state stateOutOfBound {
+        verify(false, error.StackOutOfBounds);
+        transition reject;
     }
-    state parse_packet_out {
-        packet.extract<packet_out_header_t>(hdr.packet_out);
-        transition parse_ethernet;
+    state do_parse_gtpu {
+        packet.extract<gtpu_t>(hdr.gtpu);
+        packet.extract<ipv4_t>(hdr.inner_ipv4);
+        transition select(hdr.inner_ipv4.protocol) {
+            8w6: parse_tcp;
+            8w17: parse_inner_udp;
+            8w1: parse_icmp;
+            default: accept;
+        }
     }
     state parse_ethernet {
         packet.extract<ethernet_t>(hdr.ethernet);
@@ -252,31 +256,72 @@ parser FabricParser(packet_in packet, out parsed_headers_t hdr, inout fabric_met
             default: accept;
         }
     }
-    state parse_vlan_tag {
-        packet.extract<vlan_tag_t>(hdr.vlan_tag);
-        transition select(hdr.vlan_tag.eth_type) {
+    state parse_ethernet1 {
+        packet.extract<ethernet_t>(hdr.ethernet);
+        fabric_metadata._eth_type0 = hdr.ethernet.eth_type;
+        fabric_metadata._vlan_id2 = 12w4094;
+        transition select(hdr.ethernet.eth_type) {
+            16w0x8100: parse_vlan_tag;
+            16w0x8847: parse_mpls1;
             16w0x800: parse_ipv4;
-            16w0x8847: parse_mpls;
-            16w0x8100: parse_inner_vlan_tag;
             default: accept;
         }
+    }
+    state parse_ethernet2 {
+        transition stateOutOfBound;
+    }
+    state parse_ethernet3 {
+        packet.extract<ethernet_t>(hdr.ethernet);
+        fabric_metadata._eth_type0 = hdr.ethernet.eth_type;
+        fabric_metadata._vlan_id2 = 12w4094;
+        transition select(hdr.ethernet.eth_type) {
+            16w0x8100: parse_vlan_tag1;
+            16w0x8847: parse_mpls4;
+            16w0x800: parse_ipv4;
+            default: accept;
+        }
+    }
+    state parse_ethernet4 {
+        packet.extract<ethernet_t>(hdr.ethernet);
+        fabric_metadata._eth_type0 = hdr.ethernet.eth_type;
+        fabric_metadata._vlan_id2 = 12w4094;
+        transition select(hdr.ethernet.eth_type) {
+            16w0x8100: parse_vlan_tag2;
+            16w0x8847: parse_mpls7;
+            16w0x800: parse_ipv4;
+            default: accept;
+        }
+    }
+    state parse_gtpu {
+        transition select(hdr.ipv4.dst_addr[31:24]) {
+            8w140: do_parse_gtpu;
+            default: accept;
+        }
+    }
+    state parse_icmp {
+        packet.extract<icmp_t>(hdr.icmp);
+        transition accept;
+    }
+    state parse_inner_udp {
+        packet.extract<udp_t>(hdr.inner_udp);
+        fabric_metadata._l4_sport15 = hdr.inner_udp.sport;
+        fabric_metadata._l4_dport16 = hdr.inner_udp.dport;
+        transition accept;
     }
     state parse_inner_vlan_tag {
         packet.extract<vlan_tag_t>(hdr.inner_vlan_tag);
         transition select(hdr.inner_vlan_tag.eth_type) {
             16w0x800: parse_ipv4;
-            16w0x8847: parse_mpls;
+            16w0x8847: parse_mpls3;
             default: accept;
         }
     }
-    state parse_mpls {
-        packet.extract<mpls_t>(hdr.mpls);
-        fabric_metadata._mpls_label5 = hdr.mpls.label;
-        fabric_metadata._mpls_ttl6 = hdr.mpls.ttl;
-        tmp_0 = packet.lookahead<bit<4>>();
-        transition select(tmp_0) {
-            4w4: parse_ipv4;
-            default: parse_ethernet;
+    state parse_inner_vlan_tag1 {
+        packet.extract<vlan_tag_t>(hdr.inner_vlan_tag);
+        transition select(hdr.inner_vlan_tag.eth_type) {
+            16w0x800: parse_ipv4;
+            16w0x8847: parse_mpls6;
+            default: accept;
         }
     }
     state parse_ipv4 {
@@ -289,6 +334,65 @@ parser FabricParser(packet_in packet, out parsed_headers_t hdr, inout fabric_met
             8w1: parse_icmp;
             default: accept;
         }
+    }
+    state parse_mpls {
+        packet.extract<mpls_t>(hdr.mpls);
+        fabric_metadata._mpls_label5 = hdr.mpls.label;
+        fabric_metadata._mpls_ttl6 = hdr.mpls.ttl;
+        tmp_0 = packet.lookahead<bit<4>>();
+        transition select(tmp_0) {
+            4w4: parse_ipv4;
+            default: parse_ethernet1;
+        }
+    }
+    state parse_mpls1 {
+        packet.extract<mpls_t>(hdr.mpls);
+        fabric_metadata._mpls_label5 = hdr.mpls.label;
+        fabric_metadata._mpls_ttl6 = hdr.mpls.ttl;
+        tmp_0 = packet.lookahead<bit<4>>();
+        transition select(tmp_0) {
+            4w4: parse_ipv4;
+            default: parse_ethernet2;
+        }
+    }
+    state parse_mpls2 {
+        packet.extract<mpls_t>(hdr.mpls);
+        fabric_metadata._mpls_label5 = hdr.mpls.label;
+        fabric_metadata._mpls_ttl6 = hdr.mpls.ttl;
+        tmp_0 = packet.lookahead<bit<4>>();
+        transition select(tmp_0) {
+            4w4: parse_ipv4;
+            default: parse_ethernet4;
+        }
+    }
+    state parse_mpls3 {
+        packet.extract<mpls_t>(hdr.mpls);
+        fabric_metadata._mpls_label5 = hdr.mpls.label;
+        fabric_metadata._mpls_ttl6 = hdr.mpls.ttl;
+        tmp_0 = packet.lookahead<bit<4>>();
+        transition select(tmp_0) {
+            4w4: parse_ipv4;
+            default: parse_ethernet3;
+        }
+    }
+    state parse_mpls4 {
+        transition stateOutOfBound;
+    }
+    state parse_mpls5 {
+        transition stateOutOfBound;
+    }
+    state parse_mpls6 {
+        transition stateOutOfBound;
+    }
+    state parse_mpls7 {
+        transition stateOutOfBound;
+    }
+    state parse_mpls8 {
+        transition stateOutOfBound;
+    }
+    state parse_packet_out {
+        packet.extract<packet_out_header_t>(hdr.packet_out);
+        transition parse_ethernet;
     }
     state parse_tcp {
         packet.extract<tcp_t>(hdr.tcp);
@@ -305,31 +409,38 @@ parser FabricParser(packet_in packet, out parsed_headers_t hdr, inout fabric_met
             default: accept;
         }
     }
-    state parse_icmp {
-        packet.extract<icmp_t>(hdr.icmp);
-        transition accept;
-    }
-    state parse_gtpu {
-        transition select(hdr.ipv4.dst_addr[31:24]) {
-            8w140: do_parse_gtpu;
+    state parse_vlan_tag {
+        packet.extract<vlan_tag_t>(hdr.vlan_tag);
+        transition select(hdr.vlan_tag.eth_type) {
+            16w0x800: parse_ipv4;
+            16w0x8847: parse_mpls2;
+            16w0x8100: parse_inner_vlan_tag;
             default: accept;
         }
     }
-    state do_parse_gtpu {
-        packet.extract<gtpu_t>(hdr.gtpu);
-        packet.extract<ipv4_t>(hdr.inner_ipv4);
-        transition select(hdr.inner_ipv4.protocol) {
-            8w6: parse_tcp;
-            8w17: parse_inner_udp;
-            8w1: parse_icmp;
+    state parse_vlan_tag1 {
+        packet.extract<vlan_tag_t>(hdr.vlan_tag);
+        transition select(hdr.vlan_tag.eth_type) {
+            16w0x800: parse_ipv4;
+            16w0x8847: parse_mpls5;
+            16w0x8100: parse_inner_vlan_tag1;
             default: accept;
         }
     }
-    state parse_inner_udp {
-        packet.extract<udp_t>(hdr.inner_udp);
-        fabric_metadata._l4_sport15 = hdr.inner_udp.sport;
-        fabric_metadata._l4_dport16 = hdr.inner_udp.dport;
-        transition accept;
+    state parse_vlan_tag2 {
+        packet.extract<vlan_tag_t>(hdr.vlan_tag);
+        transition select(hdr.vlan_tag.eth_type) {
+            16w0x800: parse_ipv4;
+            16w0x8847: parse_mpls8;
+            16w0x8100: parse_inner_vlan_tag;
+            default: accept;
+        }
+    }
+    state start {
+        transition select(standard_metadata.ingress_port) {
+            9w255: parse_packet_out;
+            default: parse_ethernet;
+        }
     }
 }
 

@@ -15,11 +15,22 @@ struct headers {
 
 parser p(packet_in packet, out headers hdr) {
     @name("p.sub_parser.tracker") bit<8> sub_parser_tracker;
+    state stateOutOfBound {
+        verify(false, error.StackOutOfBounds);
+        transition reject;
+    }
+    state noMatch {
+        verify(false, error.NoMatch);
+        transition reject;
+    }
     state start {
         hdr.nop.setInvalid();
         hdr.p.setInvalid();
         sub_parser_tracker = 8w0;
         transition sub_parser_next;
+    }
+    state start_0 {
+        transition accept;
     }
     state sub_parser_next {
         transition select((bit<1>)(sub_parser_tracker == 8w1)) {
@@ -28,10 +39,22 @@ parser p(packet_in packet, out headers hdr) {
             default: noMatch;
         }
     }
-    state sub_parser_next_true {
-        packet.extract<padding>(hdr.p);
-        hdr.p.p = 8w1;
-        transition sub_parser_next_join;
+    state sub_parser_next1 {
+        transition select((bit<1>)(sub_parser_tracker == 8w1)) {
+            1w1: sub_parser_next_true;
+            1w0: sub_parser_next_join1;
+            default: noMatch;
+        }
+    }
+    state sub_parser_next2 {
+        transition stateOutOfBound;
+    }
+    state sub_parser_next3 {
+        transition select((bit<1>)(sub_parser_tracker == 8w1)) {
+            1w1: sub_parser_next_true1;
+            1w0: sub_parser_next_join3;
+            default: noMatch;
+        }
     }
     state sub_parser_next_join {
         transition select(hdr.p.p) {
@@ -39,17 +62,48 @@ parser p(packet_in packet, out headers hdr) {
             default: start_0;
         }
     }
+    state sub_parser_next_join1 {
+        transition select(hdr.p.p) {
+            8w0: sub_parser_parse_hdr1;
+            default: start_0;
+        }
+    }
+    state sub_parser_next_join2 {
+        transition select(hdr.p.p) {
+            8w0: sub_parser_parse_hdr2;
+            default: start_0;
+        }
+    }
+    state sub_parser_next_join3 {
+        transition stateOutOfBound;
+    }
+    state sub_parser_next_join4 {
+        transition stateOutOfBound;
+    }
+    state sub_parser_next_true {
+        packet.extract<padding>(hdr.p);
+        hdr.p.p = 8w1;
+        transition sub_parser_next_join2;
+    }
+    state sub_parser_next_true1 {
+        packet.extract<padding>(hdr.p);
+        hdr.p.p = 8w1;
+        transition sub_parser_next_join4;
+    }
     state sub_parser_parse_hdr {
         sub_parser_tracker = sub_parser_tracker + 8w1;
         packet.extract<H>(hdr.nop);
-        transition sub_parser_next;
+        transition sub_parser_next1;
     }
-    state start_0 {
-        transition accept;
+    state sub_parser_parse_hdr1 {
+        sub_parser_tracker = sub_parser_tracker + 8w1;
+        packet.extract<H>(hdr.nop);
+        transition sub_parser_next2;
     }
-    state noMatch {
-        verify(false, error.NoMatch);
-        transition reject;
+    state sub_parser_parse_hdr2 {
+        sub_parser_tracker = sub_parser_tracker + 8w1;
+        packet.extract<H>(hdr.nop);
+        transition sub_parser_next3;
     }
 }
 
