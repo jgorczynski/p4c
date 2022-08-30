@@ -5,5 +5,3 @@
 12-MultiTagsNoLoop.p4(65): [--Wwarn=ignore-prop] warning: Result of packet.extract is not defined: Exception: OverwritingHeader
     extract(vlan_tag );
     ^^^^^^^^^^^^^^^^^^
-[--Wwarn=invalid] warning: Parser cycle cannot be unrolled:
-Parser ParserImpl state chain: .start, .parse_my_tag, .parse_vlan_tag, .parse_my_tag, .parse_vlan_tag, .parse_my_tag
