@@ -25,6 +25,10 @@ control VerifyChecksumI(inout H hdr, inout M meta) {
 }
 
 parser ParserI(packet_in b, out H parsedHdr, inout M meta, inout std_meta_t std_meta) {
+    state stateOutOfBound {
+        verify(false, error.StackOutOfBounds);
+        transition reject;
+    }
     state p0 {
         b.extract<T>(parsedHdr.hstack[32w0]);
         transition select(parsedHdr.hstack[32w1].y) {
@@ -33,11 +37,7 @@ parser ParserI(packet_in b, out H parsedHdr, inout M meta, inout std_meta_t std_
         }
     }
     state p01 {
-        b.extract<T>(parsedHdr.hstack[32w1]);
-        transition select(parsedHdr.hstack[32w1].y) {
-            32w0: p01;
-            default: accept;
-        }
+        transition stateOutOfBound;
     }
     state start {
         transition p0;

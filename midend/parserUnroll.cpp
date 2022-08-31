@@ -154,7 +154,7 @@ class ParserStateRewriter : public Transform {
                         ExpressionEvaluator* afterExec, StatesVisitedMap& visitedStates) :
     parserStructure(parserStructure), state(state),
     valueMap(valueMap), refMap(refMap), typeMap(typeMap), afterExec(afterExec),
-    visitedStates(visitedStates)  {
+    visitedStates(visitedStates), wasOutOfBound(false)  {
         CHECK_NULL(parserStructure); CHECK_NULL(state);
         CHECK_NULL(refMap); CHECK_NULL(typeMap);
         CHECK_NULL(parserStructure); CHECK_NULL(state);
@@ -176,6 +176,11 @@ class ParserStateRewriter : public Transform {
         auto* res = value->to<SymbolicInteger>()->constant->clone();
         newExpression->right = res;
         BUG_CHECK(res->fitsInt64(), "To big integer for a header stack index %1%", res);
+        const auto* arrayType = basetype->to<IR::Type_Stack>();
+        if (res->asUnsigned() >= arrayType->getSize()) {
+            wasOutOfBound = true;
+            return expression;
+        }
         return newExpression;
     }
 
@@ -192,13 +197,17 @@ class ParserStateRewriter : public Transform {
             unsigned offset = 0;
             if (state->statesIndexes.count(expression->expr)) {
                 idx = state->statesIndexes.at(expression->expr);
-                if (idx + 1 < array->size && expression->member.name != IR::Type_Stack::last) {
+                if (expression->member.name != IR::Type_Stack::last) {
                     offset = 1;
                 }
             }
             if (expression->member.name == IR::Type_Stack::lastIndex) {
                 return new IR::Constant(IR::Type_Bits::get(32), idx);
             } else {
+                if (idx + offset >= array->size) {
+                    wasOutOfBound = true;
+                    return expression;
+                }
                 state->statesIndexes[expression->expr] = idx + offset;
                 return new IR::ArrayIndex(expression->expr->clone(),
                                           new IR::Constant(IR::Type_Bits::get(32), idx + offset));
@@ -218,6 +227,7 @@ class ParserStateRewriter : public Transform {
         return new IR::PathExpression(expression->type, new IR::Path(newName, false));
     }
     inline size_t getIndex() { return currentIndex; }
+    bool isOutOfBound() {return wasOutOfBound;}
 
  protected:
     const IR::Type* getTypeArray(const IR::Node* element) {
@@ -277,6 +287,7 @@ class ParserStateRewriter : public Transform {
     ExpressionEvaluator* afterExec;
     StatesVisitedMap& visitedStates;
     size_t currentIndex;
+    bool wasOutOfBound;
 };
 
 class ParserSymbolicInterpreter {
@@ -447,6 +458,9 @@ class ParserSymbolicInterpreter {
         ParserStateRewriter rewriter(structure, state, valueMap, refMap, typeMap, &ev,
                                      visitedStates);
         const IR::Node* node = sord->apply(rewriter);
+        if (rewriter.isOutOfBound()) {
+            return nullptr;
+        }
         newSord = node->to<IR::StatOrDecl>();
         LOG2("After " << sord << " state is\n" << valueMap);
         return newSord;
@@ -472,6 +486,9 @@ class ParserSymbolicInterpreter {
             ParserStateRewriter rewriter(structure, state, valueMap, refMap, typeMap, nullptr,
                                          visitedStates);
             const IR::Expression* node = select->apply(rewriter);
+            if (rewriter.isOutOfBound()) {
+                return EvaluationSelectResult(nullptr, nullptr);
+            }
             CHECK_NULL(node);
             newSelect = node->to<IR::Expression>();
             CHECK_NULL(newSelect);
@@ -489,6 +506,9 @@ class ParserSymbolicInterpreter {
             ParserStateRewriter rewriter(structure, state, valueMap, refMap, typeMap, &ev,
                                          visitedStates);
             const IR::Node* node = se->select->apply(rewriter);
+            if (rewriter.isOutOfBound()) {
+                return EvaluationSelectResult(nullptr, nullptr);
+            }
             const IR::ListExpression* newListSelect = node->to<IR::ListExpression>();
             auto etalonStateIndexes = state->statesIndexes;
             for (auto c : se->selectCases) {
@@ -501,6 +521,9 @@ class ParserSymbolicInterpreter {
                 ParserStateRewriter rewriter(structure, state, valueMap, refMap, typeMap,
                                              nullptr, visitedStates);
                 const IR::Node* node = c->apply(rewriter);
+                if (rewriter.isOutOfBound()) {
+                    return EvaluationSelectResult(nullptr, nullptr);
+                }
                 CHECK_NULL(node);
                 auto newC = node->to<IR::SelectCase>();
                 CHECK_NULL(newC);
@@ -644,7 +667,9 @@ class ParserSymbolicInterpreter {
         state->after = valueMap;
         auto result = evaluateSelect(state, valueMap);
         if (unroll) {
-            BUG_CHECK(result.second, "Can't generate new selection %1%", state);
+            if (result.second == nullptr) {
+                return EvaluationStateResult(nullptr, true);
+            }
             if (state->name == newName) {
                 state->newState = new IR::ParserState(state->state->srcInfo, newName,
                                                       state->state->annotations, components,
@@ -721,11 +746,12 @@ class ParserSymbolicInterpreter {
                 addOutFoBound(stateInfo, newStates);
                 continue;
             }
-            bool notAdded = newStates.count(getNewName(stateInfo)) == 0;
+            IR::ID newName = getNewName(stateInfo);
+            bool notAdded = newStates.count(newName) == 0;
             auto nextStates = evaluateState(stateInfo, newStates);
             if (nextStates.first == nullptr) {
                 if (nextStates.second && stateInfo->predecessor &&
-                 stateInfo->state->name !=stateInfo->predecessor->newState->name) {
+                 newName.name !=stateInfo->predecessor->newState->name) {
                     // generate call OutOfBound
                     addOutFoBound(stateInfo, newStates, false);
                 } else {
